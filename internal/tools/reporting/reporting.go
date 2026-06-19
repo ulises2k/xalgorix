@@ -4,6 +4,7 @@ package reporting
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -11,6 +12,11 @@ import (
 	"github.com/xalgord/xalgorix/v4/internal/scanctx"
 	"github.com/xalgord/xalgorix/v4/internal/tools"
 )
+
+// sleepMagnitudeRe extracts the numeric argument of SLEEP/pg_sleep/WAITFOR-style
+// delays from timing-SQLi proof, so we can tell a single-shot test (one
+// magnitude) from a real differential test (two or more distinct magnitudes).
+var sleepMagnitudeRe = regexp.MustCompile(`(?:sleep|pg_sleep|delay)\s*[('"\[:\s]\s*0*(\d+)`)
 
 // Valid verification methods — the agent must specify one when reporting.
 var validVerificationMethods = map[string]bool{
@@ -101,23 +107,31 @@ type VerificationVerdict struct {
 type FindingVerifier func(VerificationRequest) VerificationVerdict
 
 var (
-	findingVerifier   FindingVerifier
+	// findingVerifiers is keyed by scan-context ID so concurrent scans never
+	// cross-wire: scan A's reports are always verified by scan A's agent, not
+	// whichever agent was constructed most recently.
+	findingVerifiers  = make(map[string]FindingVerifier)
 	findingVerifierMu sync.RWMutex
 )
 
-// SetFindingVerifier installs the process-wide finding verifier. The agent
-// package calls this so report_vulnerability can validate before persisting.
-// Passing nil disables verification (CLI/tests fall back to heuristic gates).
-func SetFindingVerifier(v FindingVerifier) {
+// SetFindingVerifier installs the finding verifier for a specific scan context.
+// The agent package calls this so report_vulnerability validates before
+// persisting. Passing a nil verifier clears the entry for that context
+// (CLI/tests with no verifier fall back to the heuristic gates).
+func SetFindingVerifier(contextID string, v FindingVerifier) {
 	findingVerifierMu.Lock()
 	defer findingVerifierMu.Unlock()
-	findingVerifier = v
+	if v == nil {
+		delete(findingVerifiers, contextID)
+		return
+	}
+	findingVerifiers[contextID] = v
 }
 
-func getFindingVerifier() FindingVerifier {
+func getFindingVerifier(contextID string) FindingVerifier {
 	findingVerifierMu.RLock()
 	defer findingVerifierMu.RUnlock()
-	return findingVerifier
+	return findingVerifiers[contextID]
 }
 
 // ── Per-instance vulnerability stores ──
@@ -348,7 +362,7 @@ If you cannot exploit it, downgrade severity to 'info' and report as information
 	verifierInconclusive := false
 	verifierRan := false
 	if isHighSeverity {
-		if vf := getFindingVerifier(); vf != nil {
+		if vf := getFindingVerifier(contextID); vf != nil {
 			verifierRan = true
 			verdict := vf(VerificationRequest{
 				Title:              title,
@@ -1028,16 +1042,24 @@ func checkFalsePositive(title, description, severity, proof string) string {
 		}
 
 		if isTiming && !isHard {
-			// Differential / repeated timing turns a delay into real evidence.
-			diffMarkers := []string{"baseline", "differential", "sleep(0", "sleep(10",
-				"vs sleep", "without payload", "control request", "repeated", "averaged",
-				"scales with", "scaled with", "consistent delay", "conditional", "each run",
-				"multiple trials", "proportional"}
-			hasDiff := false
-			for _, d := range diffMarkers {
-				if strings.Contains(lp, d) {
-					hasDiff = true
-					break
+			// A real differential test compares MULTIPLE timings — a single-shot
+			// SLEEP(N) is the exact false positive this gate rejects. Accept only
+			// when there are >=2 distinct sleep magnitudes (e.g. SLEEP(0) vs
+			// SLEEP(5) vs SLEEP(10)) OR an explicit baseline/control/repeat phrase.
+			distinctMags := map[string]bool{}
+			for _, m := range sleepMagnitudeRe.FindAllStringSubmatch(lp, -1) {
+				distinctMags[m[1]] = true
+			}
+			hasDiff := len(distinctMags) >= 2
+			if !hasDiff {
+				diffMarkers := []string{"baseline", "differential", "vs sleep", "without payload",
+					"control request", "control vs", "repeated", "averaged", "scales with",
+					"scaled with", "consistent delay", "each run", "multiple trials", "proportional"}
+				for _, d := range diffMarkers {
+					if strings.Contains(lp, d) {
+						hasDiff = true
+						break
+					}
 				}
 			}
 			if !hasDiff {
@@ -1286,6 +1308,10 @@ func CleanupContext(contextID string) {
 	parentMap.Lock()
 	delete(parentMap.m, contextID)
 	parentMap.Unlock()
+
+	findingVerifierMu.Lock()
+	delete(findingVerifiers, contextID)
+	findingVerifierMu.Unlock()
 }
 
 // PromoteToParent copies a single vulnerability from the child reporting

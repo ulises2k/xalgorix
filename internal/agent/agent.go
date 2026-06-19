@@ -302,12 +302,13 @@ func NewAgent(cfg *config.Config, name string, events chan Event, localGuard sco
 		return results.String(), nil
 	})
 
-	// Install the independent finding verifier into the reporting choke point.
-	// Every medium+ candidate finding from this agent (or any sub-agent sharing
-	// the registry) is re-tested by a.verifyFinding before being persisted.
-	// The verifier builds its own restricted, read-only registry, so it never
-	// recurses through report_vulnerability.
-	reporting.SetFindingVerifier(a.verifyFinding)
+	// Install the independent finding verifier for THIS scan context (keyed by
+	// scan-context ID so concurrent scans never cross-wire). Every medium+
+	// candidate finding from this agent (or any sub-agent sharing the context)
+	// is re-tested by a.verifyFinding before being persisted. The verifier
+	// builds its own restricted, read-only registry, so it never recurses
+	// through report_vulnerability.
+	reporting.SetFindingVerifier(sctx.ID, a.verifyFinding)
 
 	return a
 }

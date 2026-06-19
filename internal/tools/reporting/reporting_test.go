@@ -291,6 +291,15 @@ func TestCheckFalsePositive_TimeBasedSQLi(t *testing.T) {
 			"Sent ' AND SLEEP(5)-- and the response took 5.2 seconds, confirming time-based blind SQLi.",
 			true,
 		},
+		// Single SLEEP(10) — a lone high sleep value is still single-shot → rejected.
+		{
+			"single sleep10 measurement",
+			"Time-based blind SQL injection",
+			"id parameter injectable",
+			"high",
+			"Sent ' AND SLEEP(10)-- and the response took 10 seconds.",
+			true,
+		},
 		// Differential timing with baseline → accepted.
 		{
 			"differential timing accepted",
@@ -517,13 +526,12 @@ func TestReportVuln_IndependentVerifierGate(t *testing.T) {
 	}
 
 	t.Run("confirmed persists and marks verified", func(t *testing.T) {
-		SetFindingVerifier(func(VerificationRequest) VerificationVerdict {
-			return VerificationVerdict{Confirmed: true, Reason: "reproduced", Evidence: "dumped rows again"}
-		})
-		defer SetFindingVerifier(nil)
 		ctx := "verifier-confirm"
 		CleanupContext(ctx)
 		defer CleanupContext(ctx)
+		SetFindingVerifier(ctx, func(VerificationRequest) VerificationVerdict {
+			return VerificationVerdict{Confirmed: true, Reason: "reproduced", Evidence: "dumped rows again"}
+		})
 
 		res, err := reportVulnWithContextID(ctx, base())
 		if err != nil {
@@ -539,13 +547,12 @@ func TestReportVuln_IndependentVerifierGate(t *testing.T) {
 	})
 
 	t.Run("rejected drops the finding", func(t *testing.T) {
-		SetFindingVerifier(func(VerificationRequest) VerificationVerdict {
-			return VerificationVerdict{Confirmed: false, Reason: "could not reproduce — by design"}
-		})
-		defer SetFindingVerifier(nil)
 		ctx := "verifier-reject"
 		CleanupContext(ctx)
 		defer CleanupContext(ctx)
+		SetFindingVerifier(ctx, func(VerificationRequest) VerificationVerdict {
+			return VerificationVerdict{Confirmed: false, Reason: "could not reproduce — by design"}
+		})
 
 		res, err := reportVulnWithContextID(ctx, base())
 		if err != nil {
@@ -560,13 +567,12 @@ func TestReportVuln_IndependentVerifierGate(t *testing.T) {
 	})
 
 	t.Run("inconclusive persists as unverified", func(t *testing.T) {
-		SetFindingVerifier(func(VerificationRequest) VerificationVerdict {
-			return VerificationVerdict{Inconclusive: true, Reason: "verifier LLM error"}
-		})
-		defer SetFindingVerifier(nil)
 		ctx := "verifier-inconclusive"
 		CleanupContext(ctx)
 		defer CleanupContext(ctx)
+		SetFindingVerifier(ctx, func(VerificationRequest) VerificationVerdict {
+			return VerificationVerdict{Inconclusive: true, Reason: "verifier LLM error"}
+		})
 
 		res, err := reportVulnWithContextID(ctx, base())
 		if err != nil {
@@ -585,9 +591,8 @@ func TestReportVuln_IndependentVerifierGate(t *testing.T) {
 	})
 
 	t.Run("no verifier falls back to heuristic verified flag", func(t *testing.T) {
-		SetFindingVerifier(nil)
 		ctx := "verifier-absent"
-		CleanupContext(ctx)
+		CleanupContext(ctx) // ensure no verifier registered for this context
 		defer CleanupContext(ctx)
 
 		res, err := reportVulnWithContextID(ctx, base())

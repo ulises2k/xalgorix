@@ -130,10 +130,13 @@ func (a *Agent) verifyFinding(req reporting.VerificationRequest) reporting.Verif
 				_, _ = vreg.Execute(tc.Name, tc.Args)
 				break
 			}
-			res, execErr := vreg.Execute(tc.Name, tc.Args)
+			// Route through the SAME scope guard + hard-timeout the main agent
+			// applies, so the verifier cannot probe out-of-scope/local hosts and
+			// a hung re-test cannot outlive the report_vulnerability call.
+			res := a.execVerifierToolGuarded(vreg, tc.Name, tc.Args)
 			out := res.Output
-			if execErr != nil {
-				out = "error: " + execErr.Error()
+			if res.Error != "" {
+				out = "error: " + res.Error
 			}
 			a.emit(Event{Type: "tool_result", ToolName: "verify:" + tc.Name, ToolResult: res})
 			msgs = append(msgs, llm.Message{Role: "user", Content: fmt.Sprintf("[%s output]\n%s", tc.Name, truncStr(out, 4000))})
@@ -153,6 +156,52 @@ func (a *Agent) verifyFinding(req reporting.VerificationRequest) reporting.Verif
 		a.emit(Event{Type: "message", Content: fmt.Sprintf("🚫 Verifier REJECTED %q: %s", req.Title, verdict.Reason)})
 	}
 	return *verdict
+}
+
+// execVerifierToolGuarded runs a verifier re-test tool through the SAME scope
+// guard and hard-timeout the main agent applies to its own tool calls. Without
+// this, the verifier's direct registry execution would bypass the
+// localhost/RFC1918/dashboard-listener guard and the per-tool watchdog —
+// letting it probe hosts the main agent blocks and leaving a hung tool running
+// past the report_vulnerability ceiling.
+func (a *Agent) execVerifierToolGuarded(vreg *tools.Registry, name string, args map[string]string) tools.Result {
+	if blocked, reason := a.shouldBlockForOutOfScope(name, args); blocked {
+		return tools.Result{Output: "⛔ OUT-OF-SCOPE TARGET BLOCKED — " + reason +
+			"\nYou cannot probe this host during verification. If the finding depends on reaching it, it is not independently verifiable here — submit an 'inconclusive' verdict."}
+	}
+
+	resultCh := make(chan tools.Result, 1)
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				resultCh <- tools.Result{Error: fmt.Sprintf("verifier tool panicked: %v", r)}
+			}
+		}()
+		res, err := vreg.Execute(name, args)
+		if err != nil && res.Error == "" {
+			res.Error = err.Error()
+		}
+		resultCh <- res
+	}()
+
+	timeout := a.hardTimeoutFor(name)
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	select {
+	case res := <-resultCh:
+		a.touchActivity()
+		return res
+	case <-timer.C:
+		switch name {
+		case "terminal_execute", "python_action":
+			a.scanCtx.Terminal.KillAll()
+		case "browser_action":
+			browser.CleanupContext(a.scanCtx.ID)
+		}
+		return tools.Result{Error: fmt.Sprintf("[verifier tool %q TIMEOUT after %s]", name, timeout)}
+	case <-a.ctx.Done():
+		return tools.Result{Error: "agent stopped during verification"}
+	}
 }
 
 // buildVerifierPrompt produces the adversarial verifier system prompt.

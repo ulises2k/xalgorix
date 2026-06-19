@@ -185,7 +185,7 @@ ok "Web UI built → internal/web/static"
 info "Building and verifying..."
 if ! go build ./cmd/xalgorix/; then
     warn "Build failed — reverting version bump and deleting release branch"
-    git checkout -- "$MAIN_GO" "$MAKEFILE" "$README"
+    git checkout -- "$MAIN_GO" "$MAKEFILE" "$README" internal/web/static
     git checkout main
     git branch -D "$RELEASE_BRANCH"
     die "Build failed (version bump reverted, release branch deleted)"
