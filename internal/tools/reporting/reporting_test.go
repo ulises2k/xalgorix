@@ -837,14 +837,14 @@ func TestPipeline_RealFindingsSurvive(t *testing.T) {
 	// Well-formed REAL findings must pass BOTH deterministic gates untouched.
 	// This is the guard against the new gates suppressing true findings.
 	real := []struct {
-		name           string
-		title          string
-		desc           string
-		cwe            string
-		method         string
-		vector         string
-		severity       string
-		proof          string
+		name     string
+		title    string
+		desc     string
+		cwe      string
+		method   string
+		vector   string
+		severity string
+		proof    string
 	}{
 		{
 			"sqli data extraction",

@@ -569,7 +569,7 @@ func anyContains(s string, subs ...string) bool {
 // Only enforced for medium+ (info/low are advisory and don't require proof).
 func checkClaimConsistency(title, cwe, method, cvssVector, severity, description, proof string) string {
 	sev := strings.ToLower(strings.TrimSpace(severity))
-	if !(sev == "critical" || sev == "high" || sev == "medium") {
+	if sev != "critical" && sev != "high" && sev != "medium" {
 		return ""
 	}
 
@@ -1138,7 +1138,7 @@ func checkFalsePositive(title, description, severity, proof string) string {
 	// served on production and linked from public docs. Exposed FIELD/PARAMETER
 	// NAMES (api_key, webhook_secret) are schema labels, NOT secret values. Reject
 	// unless an actual secret VALUE is exposed.
-	isApiDocs := strings.Contains(lower, "openapi") ||
+	isAPIDocs := strings.Contains(lower, "openapi") ||
 		strings.Contains(lower, "swagger") ||
 		strings.Contains(lower, "/openapi.json") ||
 		strings.Contains(lower, "api documentation") ||
@@ -1147,7 +1147,7 @@ func checkFalsePositive(title, description, severity, proof string) string {
 		strings.Contains(lower, "redoc") ||
 		strings.Contains(lower, "api-docs") ||
 		strings.Contains(lower, "wadl")
-	if isApiDocs && isHighSev {
+	if isAPIDocs && isHighSev {
 		lp := strings.ToLower(proof)
 		// A real leak = actual secret VALUES embedded in the spec, not field names.
 		valueLeak := []string{"sk_live", "sk_test", "bearer ey", "aws_secret", "akia",
