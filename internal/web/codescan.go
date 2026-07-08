@@ -78,8 +78,12 @@ func pickLoopbackPort() (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	defer l.Close()
-	return l.Addr().(*net.TCPAddr).Port, nil
+	addr, ok := l.Addr().(*net.TCPAddr)
+	_ = l.Close()
+	if !ok {
+		return 0, fmt.Errorf("unexpected listener address type %T", addr)
+	}
+	return addr.Port, nil
 }
 
 // codeTargetLabel derives a short, human-readable label from a repo URL or

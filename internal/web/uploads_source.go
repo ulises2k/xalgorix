@@ -59,7 +59,7 @@ func (s *Server) handleUploadSource(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	tmpPath := tmp.Name()
-	defer os.Remove(tmpPath)
+	defer func() { _ = os.Remove(tmpPath) }()
 	size, err := io.Copy(tmp, file)
 	if err != nil {
 		tmp.Close()
@@ -112,7 +112,7 @@ func unzipInto(archivePath string, archiveSize int64, destRoot string) (int, err
 	if err != nil {
 		return 0, fmt.Errorf("not a valid zip: %w", err)
 	}
-	defer zr.Close()
+	defer func() { _ = zr.Close() }()
 
 	// Resolve destRoot to an absolute, cleaned prefix for containment checks.
 	absDest, err := filepath.Abs(destRoot)

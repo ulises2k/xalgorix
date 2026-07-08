@@ -629,8 +629,12 @@ func cliPickLoopbackPort() int {
 	if err != nil {
 		return 8137
 	}
-	defer l.Close()
-	return l.Addr().(*net.TCPAddr).Port
+	addr, ok := l.Addr().(*net.TCPAddr)
+	_ = l.Close()
+	if !ok {
+		return 8137
+	}
+	return addr.Port
 }
 
 // cliCodeLabel derives a short label from a repo URL/path for the synthesized
