@@ -4,6 +4,7 @@ package reporting
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"regexp"
 	"strings"
 	"sync"
@@ -361,6 +362,10 @@ If you cannot exploit it, downgrade severity to 'info' and report as information
 
 	// ── Gate 3: Check for common false positive patterns ──
 	if rejection := checkFalsePositive(title, args["description"], severity, proof); rejection != "" {
+		// Audit trail: record what the false-positive gate dropped (and at what
+		// severity) so the keyword/PII lists can be reviewed and tuned if a
+		// legitimate finding is ever bounced.
+		log.Printf("[reporting] false-positive gate rejected finding: severity=%s title=%q", severity, title)
 		return tools.Result{Output: rejection}, nil
 	}
 
@@ -885,6 +890,8 @@ func checkFalsePositive(title, description, severity, proof string) string {
 	// takeover). Differential login/error/timing responses that merely reveal
 	// whether an account exists are informational. Reject at medium+ unless the
 	// proof shows real PII exposure or a working chain.
+	// NOTE: the "...respons" entries are intentionally truncated so the
+	// substring match catches both "response" and "responses" (and "responded").
 	enumKeywords := []string{
 		"username enumeration", "user enumeration", "account enumeration", "email enumeration",
 		"username disclosure", "account disclosure", "user existence", "account existence",
@@ -904,10 +911,26 @@ func checkFalsePositive(title, description, severity, proof string) string {
 		// Elevated only when it actually exposes PII/sensitive personal data or
 		// is chained into credential/session compromise — not merely "the
 		// account exists".
+		// Substring matches (already lower-cased). Deliberately covers common
+		// spellings/obfuscations so a genuine PII-leaking finding isn't wrongly
+		// bounced, while avoiding over-generic single words ("phone", "address",
+		// "name") that would let plain enumeration through.
 		piiEvidence := []string{
-			"ssn", "social security", "credit card", "date of birth", "passport number",
-			"home address", "phone number", "medical record", "leaked pii", "personal data exposed",
-			"password", "credential", "api key", "access token", "session token", "account takeover",
+			// Government / financial identifiers
+			"ssn", "social security", "credit card", "creditcard", "credit-card",
+			"card number", "cardholder", "cvv", "date of birth", "dob", "passport",
+			"driver's license", "drivers license", "driver license", "national id",
+			"tax id", "tax number",
+			// Contact / location PII (qualified forms only)
+			"home address", "billing address", "mailing address", "street address",
+			"phone number", "mobile number", "postal code", "zip code",
+			// Health / generic PII labels
+			"medical record", "health record", "leaked pii", "personal data",
+			"personally identifiable", "pii exposed", "full name and",
+			// Secrets / auth material that make it a real compromise
+			"password", "passwd", "pwd:", "credential", "api key", "api_key", "apikey",
+			"access token", "session token", "session id", "bearer token", "private key",
+			"account takeover", "reset another", "hijack",
 		}
 		hasPII := false
 		for _, kw := range piiEvidence {
