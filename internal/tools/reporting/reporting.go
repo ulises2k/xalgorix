@@ -931,7 +931,18 @@ func checkFalsePositive(title, description, severity, proof string) string {
 			"password", "passwd", "pwd:", "credential", "api key", "api_key", "apikey",
 			"access token", "session token", "session id", "bearer token", "private key",
 			"account takeover", "reset another", "hijack",
+			// MFA / recovery material — exposure enables account takeover.
+			"mfa", "2fa", "totp", "otp code", "one-time code", "one time code",
+			"security question", "secret question", "secret answer", "recovery code",
+			"backup code",
 		}
+		// NOTE (intentional): this is a noise-triage heuristic, not a security
+		// boundary. It only decides whether an ENUMERATION finding may claim
+		// medium+; a rejection is non-destructive — the agent is told to prove
+		// PII/chained impact or re-report as 'info'. The list covers the common
+		// PII/secret terms; it is deliberately NOT exhaustive, and we don't chase
+		// every synonym (a borderline finding simply lands as 'info', which is
+		// the correct default for bare enumeration).
 		hasPII := false
 		for _, kw := range piiEvidence {
 			if strings.Contains(lowerProof, kw) {
