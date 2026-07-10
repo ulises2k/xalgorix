@@ -879,6 +879,48 @@ func checkFalsePositive(title, description, severity, proof string) string {
 		}
 	}
 
+	// Pattern 11b: Username / account / email enumeration. On its own this is
+	// NOT a vulnerability — it only matters if it discloses PII/sensitive
+	// personal data or is chained into a concrete attack (e.g. account
+	// takeover). Differential login/error/timing responses that merely reveal
+	// whether an account exists are informational. Reject at medium+ unless the
+	// proof shows real PII exposure or a working chain.
+	enumKeywords := []string{
+		"username enumeration", "user enumeration", "account enumeration", "email enumeration",
+		"username disclosure", "account disclosure", "user existence", "account existence",
+		"valid username", "valid account", "enumerate user", "enumerate account",
+		"differential auth respons", "differential authentication respons",
+		"differential error respons", "observable response discrepancy", "user id enumeration",
+	}
+	isEnum := false
+	for _, kw := range enumKeywords {
+		if strings.Contains(lower, kw) {
+			isEnum = true
+			break
+		}
+	}
+	if isEnum && isHighSev {
+		lowerProof := strings.ToLower(proof + " " + description)
+		// Elevated only when it actually exposes PII/sensitive personal data or
+		// is chained into credential/session compromise — not merely "the
+		// account exists".
+		piiEvidence := []string{
+			"ssn", "social security", "credit card", "date of birth", "passport number",
+			"home address", "phone number", "medical record", "leaked pii", "personal data exposed",
+			"password", "credential", "api key", "access token", "session token", "account takeover",
+		}
+		hasPII := false
+		for _, kw := range piiEvidence {
+			if strings.Contains(lowerProof, kw) {
+				hasPII = true
+				break
+			}
+		}
+		if !hasPII {
+			return "❌ REJECTED: Username/account enumeration is NOT a vulnerability on its own — it is INFORMATIONAL. Differential login/error/timing responses that only reveal whether an account exists do not qualify as medium+. To report higher, prove actual PII/sensitive-data disclosure or a concrete chained exploit (e.g. account takeover). Otherwise re-report as 'info'."
+		}
+	}
+
 	// Pattern 12: Analytics API writeKey "bypass" — these are public client-side tokens by design
 	analyticsKeywords := []string{"writekey", "write_key", "write key", "analytics key", "segment key", "analytics api"}
 	analyticsEndpoints := []string{"/v1/i", "/v1/t", "/v1/p", "/v1/batch", "/v1/identify", "/v1/track", "/v1/page", "/v1/screen", "/v1/group", "/v1/alias"}
