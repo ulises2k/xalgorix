@@ -15,7 +15,7 @@ New here? These labels are the best entry points:
   — small, well-scoped tasks that don't require deep knowledge of the codebase.
 - [`help wanted`](https://github.com/xalgord/xalgorix/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22)
   — issues we'd love community help on.
-- [`docs`](https://github.com/xalgord/xalgorix/issues?q=is%3Aissue+is%3Aopen+label%3Adocs)
+- [`documentation`](https://github.com/xalgord/xalgorix/issues?q=is%3Aissue+is%3Aopen+label%3Adocumentation)
   — documentation improvements, great for a first PR.
 
 Comment on an issue to let us know you're picking it up so we don't double up.
