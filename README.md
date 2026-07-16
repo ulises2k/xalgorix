@@ -471,6 +471,26 @@ Then open `http://<server-ip>:9137`.
 
 If the process is listening but the page still does not load remotely, allow TCP port `9137` in the server firewall or cloud security group.
 
+#### Scanning local/internal targets
+
+By default Xalgorix refuses to scan loopback, `localhost`, private-range, or
+its own interface addresses — they're the machine Xalgorix runs on, not a
+target. On a **self-hosted, single-tenant** box you can opt in to scan a
+locally-hosted demo/staging app:
+
+```bash
+echo 'XALGORIX_ALLOW_LOCAL_TARGETS=true' | sudo tee -a /root/.xalgorix.env
+sudo xalgorix --restart
+```
+
+The dashboard's own listener is **always** protected, even with this enabled.
+
+> **⚠️ Shared / multi-tenant / hosted deployments: keep this OFF.** Enabling it
+> would let a user's scan reach the operator's own machine and internal network.
+> It is off by default, so no action is needed to stay safe — do not set
+> `XALGORIX_ALLOW_LOCAL_TARGETS` (or pin `XALGORIX_ALLOW_LOCAL_TARGETS=false`),
+> and don't expose the engine's Settings page to untrusted users.
+
 ## Web UI Workflow
 
 1. Open the dashboard at `http://127.0.0.1:9137`.
