@@ -603,6 +603,7 @@ Some settings require a restart because they affect process startup or server bi
 | Variable                 | Default           | Description                        |
 | ------------------------ | ----------------- | ---------------------------------- |
 | `XALGORIX_BIND`          | `127.0.0.1`       | Web server listen address.         |
+| `XALGORIX_ALLOW_LOCAL_TARGETS` | `false`     | Allow scanning locally-hosted apps (localhost / 127.0.0.1 / private IPs) on a self-hosted install. The dashboard's own listener is always protected. Leave off on shared/hosted deployments. |
 | `XALGORIX_USERNAME`      | none              | Dashboard username.                |
 | `XALGORIX_PASSWORD`      | none              | Dashboard password.                |
 | `XALGORIX_PASSWORD_HASH` | none              | Preferred bcrypt password hash.    |
