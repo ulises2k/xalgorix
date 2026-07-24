@@ -1726,7 +1726,11 @@ func installPackage(pkg string) string {
 	var installCmd string
 
 	if _, err := exec.LookPath("apt-get"); err == nil {
-		installCmd = fmt.Sprintf("DEBIAN_FRONTEND=noninteractive apt-get install -y -q %s 2>&1", pkg)
+		// Refresh the package index before installing: container and other
+		// minimal images routinely ship with /var/lib/apt/lists wiped, so an
+		// install-only invocation fails with "Unable to locate package" until
+		// `apt-get update` runs. Cheap when the lists are already current.
+		installCmd = fmt.Sprintf("DEBIAN_FRONTEND=noninteractive apt-get update -qq 2>&1 && DEBIAN_FRONTEND=noninteractive apt-get install -y -q %s 2>&1", pkg)
 	} else if _, err := exec.LookPath("dnf"); err == nil {
 		installCmd = fmt.Sprintf("dnf install -y -q %s 2>&1", pkg)
 	} else if _, err := exec.LookPath("yum"); err == nil {
