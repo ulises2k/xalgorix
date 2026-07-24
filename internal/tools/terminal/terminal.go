@@ -1612,7 +1612,8 @@ func installPackage(pkg string) string {
 
 	// Special handling for pipx-installed tools
 	pipxTools := map[string]string{
-		"scrapling": "scrapling",
+		"scrapling":   "scrapling",
+		"paramspider": "paramspider",
 	}
 
 	// Special handling for Cargo (Rust) tools
@@ -1640,8 +1641,6 @@ func installPackage(pkg string) string {
 		"assetfinder": "github.com/tomnomnom/assetfinder@latest",
 		// Vulnerability scanners
 		"dalfox": "github.com/hahwul/dalfox/v2@latest",
-		// Parameter discovery
-		"paramspider": "github.com/devanshbatham/paramspider@latest",
 	}
 
 	// npm-installed tools
