@@ -27,7 +27,7 @@
 # the one-line installer.
 
 # ── Stage 1: build the React web UI ──────────────────────────────────────────
-FROM node:20-bookworm-slim AS webui
+FROM node:22-bookworm-slim AS webui
 WORKDIR /src
 COPY webui/package.json webui/package-lock.json* ./webui/
 RUN cd webui && npm install --no-audit --no-fund
