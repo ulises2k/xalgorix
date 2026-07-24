@@ -106,7 +106,7 @@ func TestProviderModelsURLsUsesCodexCatalogProtocol(t *testing.T) {
 func TestModelDiscoveryConfigMatchesActiveProviderByLLMProvider(t *testing.T) {
 	// Providers routed via XALGORIX_LLM_PROVIDER (for example DeepSeek) persist a
 	// bare, provider-native model name with no "<provider>/" prefix on XALGORIX_LLM
-	// (LLMProvider="deepseek", LLM="deepseek-v4-pro"). Discovery must recognise the
+	// (LLMProvider="deepseek", LLM="deepseek-v4-pro"). Discovery must recognize the
 	// active provider from LLMProvider and reuse the saved credentials instead of
 	// failing with "save or select credentials before scanning models".
 	req := httptest.NewRequest(http.MethodGet, "/api/providers/deepseek/models", nil)
