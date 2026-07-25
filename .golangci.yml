@@ -123,6 +123,11 @@ linters:
     staticcheck:
       checks:
         - all
+        # QF1012 (stylistic quickfix: WriteString(fmt.Sprintf(...)) -> Fprintf)
+        # is newly surfaced by the staticcheck bundle in golangci-lint v2.12.2;
+        # it did not run under the prior v2.5.0 pin. Deferred like the gosec
+        # rules above to keep this a toolchain-only change (per review on #298).
+        - "-QF1012"
   exclusions:
     generated: lax
     rules:
