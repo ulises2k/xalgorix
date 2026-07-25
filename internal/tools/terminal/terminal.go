@@ -949,6 +949,9 @@ var packageMap = map[string]string{
 	"naabu":       "naabu",
 	"dalfox":      "dalfox",
 	"paramspider": "paramspider",
+	"arjun":       "arjun",
+	"x8":          "x8",
+	"uro":         "uro",
 	"feroxbuster": "feroxbuster",
 	// Findomain — Rust binary, installed via package manager or cargo
 	"findomain": "findomain",
@@ -1591,6 +1594,59 @@ func sudoPrefix() string {
 	return ""
 }
 
+// Auto-install classification maps. Kept at package scope (rather than inside
+// installPackage) so the tool -> installer mapping is unit-testable.
+
+// pipxTools are Python tools installed via pipx (falling back to pip3).
+var pipxTools = map[string]string{
+	"scrapling":   "scrapling",
+	"paramspider": "paramspider", // Python tool, NOT a Go module
+	"arjun":       "arjun",
+	"uro":         "uro",
+}
+
+// cargoTools are Rust tools: try apt first (fast), then `cargo install`.
+var cargoTools = map[string]string{
+	"feroxbuster": "feroxbuster",
+	"findomain":   "findomain",
+	"x8":          "x8",
+}
+
+// goTools are installed via `go install <path>@latest`.
+var goTools = map[string]string{
+	// ProjectDiscovery suite
+	"nuclei":    "github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest",
+	"httpx":     "github.com/projectdiscovery/httpx/cmd/httpx@latest",
+	"dnsx":      "github.com/projectdiscovery/dnsx/cmd/dnsx@latest",
+	"subfinder": "github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest",
+	"katana":    "github.com/projectdiscovery/katana/cmd/katana@latest",
+	"naabu":     "github.com/projectdiscovery/naabu/v2/cmd/naabu@latest",
+	// Web crawlers & URL discovery
+	"gospider":    "github.com/jaeles-project/gospider@latest",
+	"gau":         "github.com/lc/gau/v2/cmd/gau@latest",
+	"waybackurls": "github.com/tomnomnom/waybackurls@latest",
+	"hakrawler":   "github.com/hakluke/hakrawler@latest",
+	// Fuzzing & enumeration
+	"gobuster":    "github.com/OJ/gobuster/v3@latest",
+	"ffuf":        "github.com/ffuf/ffuf/v2@latest",
+	"assetfinder": "github.com/tomnomnom/assetfinder@latest",
+	// Vulnerability scanners
+	"dalfox": "github.com/hahwul/dalfox/v2@latest",
+}
+
+// npmTools are installed via `npm install -g`.
+var npmTools = map[string]string{
+	"playwright-cli": "@anthropic-ai/playwright-cli",
+}
+
+// aptGetInstall builds the apt-get command used to install pkg. It refreshes
+// the package lists first: a stale or empty apt cache (common on a freshly
+// provisioned container/host) otherwise makes `apt-get install <pkg>` fail
+// with "Unable to locate package" even for valid Debian package names.
+func aptGetInstall(pkg string) string {
+	return fmt.Sprintf("DEBIAN_FRONTEND=noninteractive apt-get update -qq 2>&1 && DEBIAN_FRONTEND=noninteractive apt-get install -y -q %s 2>&1", pkg)
+}
+
 // installPackage installs a system package on demand. Gated behind
 // XALGORIX_ALLOW_AUTO_INSTALL — defaults to true for root and false for
 // non-root, so a stock unprivileged xalgorix invocation can never call
@@ -1608,45 +1664,6 @@ func installPackage(pkg string) string {
 			"[install %s blocked: auto-install is disabled. Set XALGORIX_ALLOW_AUTO_INSTALL=1 in ~/.xalgorix.env to enable, or install manually.]",
 			pkg,
 		)
-	}
-
-	// Special handling for pipx-installed tools
-	pipxTools := map[string]string{
-		"scrapling": "scrapling",
-	}
-
-	// Special handling for Cargo (Rust) tools
-	cargoTools := map[string]string{
-		"feroxbuster": "feroxbuster",
-	}
-
-	// Special handling for Go-installed tools
-	goTools := map[string]string{
-		// ProjectDiscovery suite
-		"nuclei":    "github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest",
-		"httpx":     "github.com/projectdiscovery/httpx/cmd/httpx@latest",
-		"dnsx":      "github.com/projectdiscovery/dnsx/cmd/dnsx@latest",
-		"subfinder": "github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest",
-		"katana":    "github.com/projectdiscovery/katana/cmd/katana@latest",
-		"naabu":     "github.com/projectdiscovery/naabu/v2/cmd/naabu@latest",
-		// Web crawlers & URL discovery
-		"gospider":    "github.com/jaeles-project/gospider@latest",
-		"gau":         "github.com/lc/gau/v2/cmd/gau@latest",
-		"waybackurls": "github.com/tomnomnom/waybackurls@latest",
-		"hakrawler":   "github.com/hakluke/hakrawler@latest",
-		// Fuzzing & enumeration
-		"gobuster":    "github.com/OJ/gobuster/v3@latest",
-		"ffuf":        "github.com/ffuf/ffuf/v2@latest",
-		"assetfinder": "github.com/tomnomnom/assetfinder@latest",
-		// Vulnerability scanners
-		"dalfox": "github.com/hahwul/dalfox/v2@latest",
-		// Parameter discovery
-		"paramspider": "github.com/devanshbatham/paramspider@latest",
-	}
-
-	// npm-installed tools
-	npmTools := map[string]string{
-		"playwright-cli": "@anthropic-ai/playwright-cli",
 	}
 
 	homeDir := os.Getenv("HOME")
@@ -1726,7 +1743,7 @@ func installPackage(pkg string) string {
 	var installCmd string
 
 	if _, err := exec.LookPath("apt-get"); err == nil {
-		installCmd = fmt.Sprintf("DEBIAN_FRONTEND=noninteractive apt-get install -y -q %s 2>&1", pkg)
+		installCmd = aptGetInstall(pkg)
 	} else if _, err := exec.LookPath("dnf"); err == nil {
 		installCmd = fmt.Sprintf("dnf install -y -q %s 2>&1", pkg)
 	} else if _, err := exec.LookPath("yum"); err == nil {
@@ -1740,10 +1757,13 @@ func installPackage(pkg string) string {
 	}
 
 	// Prefix with sudo only when the operator has opted in via
-	// XALGORIX_AUTO_INSTALL_SUDO=1. Without that, this install will fail
-	// for non-root users — which is the safer default than silently
-	// escalating package-manager invocations.
-	installCmd = sudoPrefix() + installCmd
+	// XALGORIX_AUTO_INSTALL_SUDO=1. Wrap in `sh -c` so sudo covers the whole
+	// command — including the apt "update && install" pair — instead of only
+	// the first token. Without the opt-in this install fails for non-root
+	// users, the safer default over silent escalation.
+	if sudoPrefix() != "" {
+		installCmd = "sudo sh -c '" + installCmd + "'"
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 600*time.Second) // 10 min for pkg install
 	defer cancel()
