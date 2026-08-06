@@ -68,3 +68,26 @@ func TestApplyProtocolFilter(t *testing.T) {
 		}
 	}
 }
+
+// Protocols the DNS/HTTP/SMTP selector does not cover (ldap for JNDI/Log4Shell,
+// smb, ftp, or a blank protocol) are separate proof channels and must survive
+// any selection.
+func TestApplyProtocolFilterKeepsUnselectableProtocols(t *testing.T) {
+	hits := []Interaction{
+		{Protocol: "dns"},
+		{Protocol: "ldap"},
+		{Protocol: "smb"},
+		{Protocol: "ftp"},
+		{Protocol: ""},
+	}
+
+	got := applyProtocolFilter(hits, parseAllowedProtocols("http"))
+	if len(got) != 4 {
+		t.Fatalf("http-only: got %d hits, want 4 (ldap, smb, ftp, blank kept; dns dropped)", len(got))
+	}
+	for _, h := range got {
+		if h.Protocol == "dns" {
+			t.Fatalf("http-only must drop dns interactions")
+		}
+	}
+}

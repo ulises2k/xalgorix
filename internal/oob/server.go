@@ -123,8 +123,17 @@ func parseAllowedProtocols(raw string) map[string]bool {
 	return set
 }
 
+// filterableProtocols are the only protocols XALGORIX_OOB_INTERACTIONS selects
+// between. Anything else interactsh can report (ldap, smb, ftp, responder, or a
+// protocol we don't recognize yet) is always kept: those are independent proof
+// channels — LDAP is the primary one for JNDI/Log4Shell — that a DNS/HTTP/SMTP
+// selector was never meant to suppress. An interaction with a blank protocol is
+// kept for the same reason.
+var filterableProtocols = map[string]bool{"dns": true, "http": true, "smtp": true}
+
 // applyProtocolFilter drops interactions whose protocol the operator excluded.
-// A nil allow-set is a pass-through (all protocols allowed).
+// A nil allow-set is a pass-through (all protocols allowed), and protocols
+// outside filterableProtocols are never dropped.
 func applyProtocolFilter(in []Interaction, allow map[string]bool) []Interaction {
 	if allow == nil {
 		return in
@@ -135,7 +144,7 @@ func applyProtocolFilter(in []Interaction, allow map[string]bool) []Interaction 
 		if proto == "https" {
 			proto = "http"
 		}
-		if allow[proto] {
+		if !filterableProtocols[proto] || allow[proto] {
 			out = append(out, it)
 		}
 	}
